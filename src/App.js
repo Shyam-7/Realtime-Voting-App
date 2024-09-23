@@ -1,14 +1,18 @@
+// src/App.js
+
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import VotingInterface from './components/VotingInterface';
 import VotingChart from './components/VotingChart';
 import LoginForm from './components/LoginForm';
+import RegisterForm from './components/RegisterForm';
 import './App.css';
 
 const socket = io('http://localhost:3001');
 
 function App() {
-  const [votes, setVotes] = useState({ option1: 0, option2: 0 });
+  const [votes, setVotes] = useState({ pool1: 0, pool2: 0, pool3: 0, pool4: 0, pool5: 0 });
   const [userId, setUserId] = useState(null);
   const [error, setError] = useState(null);
 
@@ -32,12 +36,12 @@ function App() {
         body: JSON.stringify({ username, password }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error);
+        throw new Error(data.error);
       }
 
-      const data = await response.json();
       setUserId(data.userId);
       setError(null);
     } catch (err) {
@@ -45,19 +49,44 @@ function App() {
     }
   };
 
-  const handleVote = async (option) => {
+  const handleRegister = async (username, password) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error);
+      }
+
+      // Optionally, auto-login after registration
+      setUserId(username);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleVote = async (pool) => {
     try {
       const response = await fetch('http://localhost:3001/api/vote', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId, option }),
+        body: JSON.stringify({ userId, pool }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error);
+        throw new Error(data.error);
       }
 
       setError(null);
@@ -66,20 +95,71 @@ function App() {
     }
   };
 
+  const handleLogout = () => {
+    setUserId(null);
+  };
+
   return (
-    <div className="App">
-      <h1>Real-Time Voting App</h1>
-      {userId ? (
-        <>
-          <p>Logged in as: {userId}</p>
-          <VotingInterface handleVote={handleVote} />
-          <VotingChart votes={votes} />
-        </>
-      ) : (
-        <LoginForm onLogin={handleLogin} />
-      )}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-    </div>
+    <Router>
+      <div className="App">
+        <h1>Real-Time Voting App</h1>
+        <nav>
+          {userId ? (
+            <button onClick={handleLogout}>Logout</button>
+          ) : (
+            <>
+              <Link to="/login">
+                <button>Login</button>
+              </Link>
+              <Link to="/register">
+                <button>Register</button>
+              </Link>
+            </>
+          )}
+        </nav>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              userId ? (
+                <Navigate to="/voting" />
+              ) : (
+                <LoginForm onLogin={handleLogin} />
+              )
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              userId ? (
+                <Navigate to="/voting" />
+              ) : (
+                <RegisterForm onRegister={handleRegister} />
+              )
+            }
+          />
+          <Route
+            path="/voting"
+            element={
+              userId ? (
+                <>
+                  <p>Logged in as: {userId}</p>
+                  <VotingInterface handleVote={handleVote} />
+                  <VotingChart votes={votes} />
+                </>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          <Route
+            path="/"
+            element={<Navigate to={userId ? "/voting" : "/login"} />}
+          />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
